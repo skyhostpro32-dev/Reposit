@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>✨ AI Magic Eraser</title>
+  <style>
+    body { text-align:center; font-family:Arial; }
+    canvas { border:1px solid black; cursor:crosshair; }
+    button { padding:10px; margin:10px; }
+  </style>
+</head>
+<body>
+
+<h2>✨ AI Magic Eraser</h2>
+
+<input type="file" id="upload"><br><br>
+<button onclick="sendToAI()">🚀 Remove Object</button><br>
+
+<canvas id="canvas"></canvas>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+let img = new Image();
+let maskPoints = [];
+
+document.getElementById("upload").onchange = e => {
+  const file = e.target.files[0];
+  img.src = URL.createObjectURL(file);
+
+  img.onload = () => {
+    canvas.width = img.width;
+    canvas.height = img.height;
+    ctx.drawImage(img,0,0);
+  };
+};
+
+// click to mark
+canvas.onclick = e => {
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+  maskPoints.push({x,y});
+
+  ctx.fillStyle = "rgba(255,0,0,0.4)";
+  ctx.beginPath();
+  ctx.arc(x,y,20,0,Math.PI*2);
+  ctx.fill();
+};
+
+// send to backend
+async function sendToAI() {
+
+  const maskCanvas = document.createElement("canvas");
+  maskCanvas.width = canvas.width;
+  maskCanvas.height = canvas.height;
+  const mctx = maskCanvas.getContext("2d");
+
+  // black background
+  mctx.fillStyle = "black";
+  mctx.fillRect(0,0,maskCanvas.width,maskCanvas.height);
+
+  // white mask spots
+  mctx.fillStyle = "white";
+  maskPoints.forEach(p=>{
+    mctx.beginPath();
+    mctx.arc(p.x,p.y,20,0,Math.PI*2);
+    mctx.fill();
+  });
+
+  const imageBlob = await fetch(canvas.toDataURL()).then(r=>r.blob());
+  const maskBlob = await fetch(maskCanvas.toDataURL()).then(r=>r.blob());
+
+  const formData = new FormData();
+  formData.append("image", imageBlob);
+  formData.append("mask", maskBlob);
+
+  const res = await fetch("http://localhost:8501/remove", {
+    method: "POST",
+    body: formData
+  });
+
+  const blob = await res.blob();
+
+  const url = URL.createObjectURL(blob);
+  window.open(url); // preview
+}
+</script>
+
+</body>
+</html>
